@@ -150,12 +150,18 @@ jobs:
           # Create docs/spec directory if doesn't exist
           mkdir -p docs/spec
           cd docs/spec
+
+          # Delete ALL existing OpenAPI spec files first to avoid conflicts
+          rm -f openapi.json openapi.yaml openapi.yml
+          echo "Removed any existing OpenAPI spec files"
+
+          # Download new spec based on URL extension
           if [[ "${{ inputs.openapi-url }}" == *.json ]]; then
-            rm -f openapi.json
             wget -O openapi.json "${{ inputs.openapi-url }}"
+            echo "Downloaded openapi.json"
           elif [[ "${{ inputs.openapi-url }}" == *.yaml || "${{ inputs.openapi-url }}" == *.yml ]]; then
-            rm -f openapi.yaml openapi.yml
             wget -O openapi.yaml "${{ inputs.openapi-url }}"
+            echo "Downloaded openapi.yaml"
           else
             echo "Unsupported file extension: ${{ inputs.openapi-url }}"
             exit 1
@@ -164,13 +170,30 @@ jobs:
       - name: Read File Extension
         working-directory: docs/spec
         run: |
-          file=$(echo openapi.*)
-          if [[ "$file" == "openapi.*" ]]; then
+          # Count OpenAPI spec files
+          file_count=$(ls openapi.{json,yaml,yml} 2>/dev/null | wc -l)
+
+          if [ "$file_count" -eq 0 ]; then
             echo "Error: No OpenAPI specification found in docs/spec/"
             echo "Either provide openapi-url input or commit a spec file to docs/spec/"
             echo "Supported files: openapi.json, openapi.yaml, openapi.yml"
             exit 1
+          elif [ "$file_count" -gt 1 ]; then
+            echo "Error: Multiple OpenAPI spec files found:"
+            ls -la openapi.* 2>/dev/null || true
+            echo "Please ensure only one openapi.{json,yaml,yml} file exists"
+            exit 1
           fi
+
+          # Get the single file
+          if [ -f "openapi.json" ]; then
+            file="openapi.json"
+          elif [ -f "openapi.yaml" ]; then
+            file="openapi.yaml"
+          elif [ -f "openapi.yml" ]; then
+            file="openapi.yml"
+          fi
+
           ext="${file##*.}"
           echo "EXTENSION=$ext" >> "$GITHUB_ENV"
           echo "SPEC_FILE=$file" >> "$GITHUB_ENV"
